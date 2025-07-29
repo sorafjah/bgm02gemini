@@ -53,7 +53,7 @@
         </header>
 
         <!-- Image Word Buttons -->
-        <div id="button-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 md:gap-6">
+        <div id="button-grid" class="grid grid-cols-2 sm:grid-cols-4 gap-4 md:gap-6">
             <!-- Buttons will be injected here by JavaScript -->
         </div>
 
@@ -104,22 +104,13 @@
         let currentStyle = null;
         let instruments = []; // To keep track of created instruments for disposal
         let scheduledEvents = []; // To keep track of scheduled events for disposal
-        let stopEventId = null; // To keep track of the scheduled stop event
 
         // --- Image Word Definitions ---
         const imageWords = {
             yuttari: { name: 'ゆったり', emoji: '☁️', color: 'bg-sky-200', hover: 'hover:bg-sky-300' },
-            amenohi: { name: 'あめのひ', emoji: '☔️', color: 'bg-slate-300', hover: 'hover:bg-slate-400' },
-            seseragi: { name: 'せせらぎ', emoji: '🏞️', color: 'bg-teal-200', hover: 'hover:bg-teal-300' },
-            tabidachi: { name: 'たびだち', emoji: '✈️', color: 'bg-amber-200', hover: 'hover:bg-amber-300' },
             bouken: { name: 'ぼうけん', emoji: '🧭', color: 'bg-orange-300', hover: 'hover:bg-orange-400' },
-            tatakai: { name: 'たたかい', emoji: '⚔️', color: 'bg-red-400', hover: 'hover:bg-red-500' },
-            bossa: { name: 'ボサノバ', emoji: '🎷', color: 'bg-purple-300', hover: 'hover:bg-purple-400' },
-            acid: { name: 'アシッド', emoji: '🧪', color: 'bg-lime-300', hover: 'hover:bg-lime-400' },
-            happycore: { name: 'ハピコア', emoji: '✨', color: 'bg-pink-300', hover: 'hover:bg-pink-400' },
-            metal: { name: 'ヘビメタ', emoji: '🤘', color: 'bg-gray-500', hover: 'hover:bg-gray-600' },
-            minimal: { name: 'ミニマル', emoji: '🔳', color: 'bg-gray-200', hover: 'hover:bg-gray-300' },
-            trance: { name: 'トランス', emoji: '💫', color: 'bg-cyan-300', hover: 'hover:bg-cyan-400' },
+            nobiyaka: { name: 'のびやか', emoji: '🪁', color: 'bg-yellow-200', hover: 'hover:bg-yellow-300' },
+            suzushige: { name: 'すずしげ', emoji: '🎐', color: 'bg-cyan-200', hover: 'hover:bg-cyan-300' },
         };
         
         // --- BGM Generation Logic ---
@@ -147,10 +138,7 @@
             },
             
             // --- Individual BGM Styles ---
-            // NOTE: The individual style functions are unchanged from the original code
-            // and are included here for completeness.
             yuttari() {
-                this.cleanup();
                 Tone.Transport.bpm.value = 80;
                 const piano = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.5, sustain: 0.2, release: 1 }, }).toDestination();
                 piano.volume.value = -8;
@@ -164,56 +152,7 @@
                 const melodyPattern = new Tone.Sequence((time, note) => { if (note) melody.triggerAttackRelease(note, '8n', time); }, ['G5', 'E5', null, 'C5', 'D5', null, 'E5', null], '4n').start(0);
                 scheduledEvents.push(melodyPattern);
             },
-            amenohi() {
-                this.cleanup();
-                Tone.Transport.bpm.value = 65;
-                const rain = new Tone.Noise('pink').start();
-                const filter = new Tone.AutoFilter({ frequency: '8n', baseFrequency: 400, octaves: 3 }).toDestination().start();
-                rain.connect(filter);
-                rain.volume.value = -25;
-                instruments.push(rain, filter);
-                const pad = new Tone.PolySynth(Tone.AMSynth, { envelope: { attack: 2, decay: 1, sustain: 0.8, release: 4 }, }).toDestination();
-                pad.volume.value = -12;
-                instruments.push(pad);
-                const chords = [['D3', 'F3', 'A3', 'C4'], ['G3', 'B3', 'D4', 'F4']];
-                const part = new Tone.Part((time, chord) => { pad.triggerAttackRelease(chord, '2n', time); }, [[0, chords[0]], ['1:0', chords[1]]]).start(0);
-                scheduledEvents.push(part);
-            },
-            seseragi() {
-                this.cleanup();
-                Tone.Transport.bpm.value = 90;
-                const waterNoise = new Tone.Noise('white').start();
-                const waterFilter = new Tone.BandpassFilter(600, 5).toDestination();
-                waterNoise.connect(waterFilter);
-                waterNoise.volume.value = -30;
-                instruments.push(waterNoise, waterFilter);
-                const bird = new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.5 }, }).toDestination();
-                bird.volume.value = -10;
-                instruments.push(bird);
-                const loop = new Tone.Loop(time => {
-                    bird.triggerAttackRelease('C6', '16n', time);
-                    bird.triggerAttackRelease('E6', '16n', time + 0.2);
-                    bird.triggerAttackRelease('G6', '16n', time + 0.5);
-                }, '2n').start('1n');
-                scheduledEvents.push(loop);
-            },
-            tabidachi() {
-                this.cleanup();
-                Tone.Transport.bpm.value = 110;
-                const piano = new Tone.PolySynth(Tone.FMSynth).toDestination();
-                piano.volume.value = -10;
-                const strings = new Tone.PolySynth(Tone.AMSynth).toDestination();
-                strings.volume.value = -15;
-                instruments.push(piano, strings);
-                const chords = [['C4', 'E4', 'G4'], ['G4', 'B4', 'D5'], ['F4', 'A4', 'C5'], ['C4', 'E4', 'G4']];
-                const part = new Tone.Part((time, chord) => {
-                    piano.triggerAttackRelease(chord, '2n', time);
-                    strings.triggerAttackRelease(chord, '1n', time);
-                }, [[0, chords[0]], ['0:2', chords[1]], ['1:0', chords[2]], ['1:2', chords[3]]]).start(0);
-                scheduledEvents.push(part);
-            },
             bouken() {
-                this.cleanup();
                 Tone.Transport.bpm.value = 130;
                 const kick = new Tone.MembraneSynth().toDestination();
                 const snare = new Tone.NoiseSynth({noise: {type: 'white'}, envelope: {attack: 0.005, decay: 0.1, sustain: 0}}).toDestination();
@@ -227,104 +166,66 @@
                 const sequence = new Tone.Sequence((time, note) => { brass.triggerAttackRelease(note, '8n', time); }, [brassNotes[0], brassNotes[1], brassNotes[2], null], '2n').start(0);
                 scheduledEvents.push(kickLoop, snareLoop, sequence);
             },
-            tatakai() {
-                this.cleanup();
-                Tone.Transport.bpm.value = 150;
-                const dist = new Tone.Distortion(0.8).toDestination();
-                const guitar = new Tone.PolySynth(Tone.FMSynth, { harmonicity: 1.5, modulationIndex: 10, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.1 } }).connect(dist);
-                guitar.volume.value = -12;
-                const kick = new Tone.MembraneSynth({octaves: 10, pitchDecay: 0.01}).toDestination();
-                kick.volume.value = -5;
-                instruments.push(guitar, kick, dist);
-                const kickLoop = new Tone.Loop(time => kick.triggerAttackRelease('C1', '16n', time), '8n').start(0);
-                const sequence = new Tone.Sequence((time, note) => { guitar.triggerAttackRelease([note, Tone.Frequency(note).transpose(7).toNote()], '16n', time); }, ['E2', null, 'E2', 'F2', 'E2', null, 'D2', null], '8n').start(0);
-                scheduledEvents.push(kickLoop, sequence);
-            },
-            bossa() {
-                this.cleanup();
-                Tone.Transport.bpm.value = 140;
-                const ag = new Tone.PluckSynth({attackNoise: 1, dampening: 4000, resonance: 0.7}).toDestination();
-                ag.volume.value = -8;
-                const kick = new Tone.MembraneSynth().toDestination();
-                const hihat = new Tone.MetalSynth({frequency: 200, envelope: {attack: 0.001, decay: 0.1, release: 0.01}, harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5}).toDestination();
-                hihat.volume.value = -25;
-                instruments.push(ag, kick, hihat);
-                const part = new Tone.Part((time, note) => { ag.triggerAttackRelease(note, '8n', time); }, [['0:0', ['C4', 'E4', 'G4']], ['0:1.5', ['B3', 'D4', 'F4']], ['0:3', ['A3', 'C4', 'E4']]]).start(0);
-                const kickLoop1 = new Tone.Loop(time => kick.triggerAttackRelease('C1', '8n', time), '2n').start(0);
-                const kickLoop2 = new Tone.Loop(time => kick.triggerAttackRelease('C1', '8n', time), '2n').start('8n*1.5');
-                const hihatLoop = new Tone.Loop(time => hihat.triggerAttackRelease('C5', '16n', time), '8n').start(0);
-                scheduledEvents.push(part, kickLoop1, kickLoop2, hihatLoop);
-            },
-            acid() {
-                this.cleanup();
-                Tone.Transport.bpm.value = 128;
-                const kick = new Tone.MembraneSynth().toDestination();
-                const filter = new Tone.AutoFilter("16n").toDestination().start();
-                filter.wet.value = 0.8;
-                const acidBass = new Tone.MonoSynth({ oscillator: { type: 'sawtooth' }, filter: { Q: 6, type: 'lowpass', rolloff: -24 }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.1 }, filterEnvelope: { attack: 0.05, decay: 0.1, sustain: 0, release: 0.1, baseFrequency: 200, octaves: 4 } }).connect(filter);
-                acidBass.volume.value = -10;
-                instruments.push(kick, acidBass, filter);
-                const kickLoop = new Tone.Loop(time => kick.triggerAttackRelease('C1', '8n', time), '4n').start(0);
-                const sequence = new Tone.Sequence((time, note) => { acidBass.triggerAttackRelease(note, '16n', time); }, ['C2', 'C3', 'C2', 'G2', 'C2', 'C3', 'A#2', 'G2'], '16n').start(0);
-                scheduledEvents.push(kickLoop, sequence);
-            },
-            happycore() {
-                this.cleanup();
-                Tone.Transport.bpm.value = 175;
-                const kick = new Tone.MembraneSynth().toDestination();
-                const lead = new Tone.Synth({oscillator: {type: 'pulse', width: 0.6}, envelope: {attack: 0.01, decay: 0.1, sustain: 0.2, release: 0.2}}).toDestination();
-                lead.volume.value = -10;
-                instruments.push(kick, lead);
-                const kickLoop = new Tone.Loop(time => kick.triggerAttackRelease('C1', '8n', time), '4n').start(0);
-                const sequence = new Tone.Sequence((time, note) => { if(note) lead.triggerAttackRelease(note, '16n', time); }, ['C5', 'E5', 'G5', 'C6', 'G5', 'E5', 'C5', null], '8n').start(0);
-                scheduledEvents.push(kickLoop, sequence);
-            },
-            metal() {
-                this.cleanup();
-                Tone.Transport.bpm.value = 180;
-                const dist = new Tone.Distortion(0.9).toDestination();
-                const guitar = new Tone.FMSynth({harmonicity: 2, modulationIndex: 15}).connect(dist);
-                guitar.volume.value = -15;
-                const kick = new Tone.MembraneSynth({pitchDecay: 0.01}).toDestination();
-                kick.volume.value = -2;
-                const snare = new Tone.NoiseSynth({noise: {type: 'white'}, envelope: {decay: 0.05}}).toDestination();
-                snare.volume.value = -8;
-                instruments.push(dist, guitar, kick, snare);
-                const kickLoop = new Tone.Loop(time => kick.triggerAttackRelease('C1', '16n', time), '8n').start(0);
-                const snareLoop = new Tone.Loop(time => snare.triggerAttackRelease('8n', time), '2n').start('4n');
-                const sequence = new Tone.Sequence((time, note) => { guitar.triggerAttackRelease(note, '16n', time); }, ['E2', null, 'E2', null, 'F#2', 'E2', 'G2', 'F#2'], '16n').start(0);
-                scheduledEvents.push(kickLoop, snareLoop, sequence);
-            },
-            minimal() {
-                this.cleanup();
-                Tone.Transport.bpm.value = 125;
-                const kick = new Tone.MembraneSynth().toDestination();
-                const synth = new Tone.MonoSynth({oscillator: {type: 'sine'}, envelope: {attack: 0.01, decay: 0.3, sustain: 0.1, release: 0.8}}).toDestination();
-                synth.volume.value = -10;
-                instruments.push(kick, synth);
-                const kickLoop = new Tone.Loop(time => kick.triggerAttackRelease('C1', '8n', time), '4n').start(0);
-                const sequence = new Tone.Sequence((time, note) => { synth.triggerAttackRelease(note, '8n', time); }, ['C4', null, 'D4', 'C4', null, 'E4', 'C4', null], '4n').start(0);
-                scheduledEvents.push(kickLoop, sequence);
-            },
-            trance() {
-                this.cleanup();
-                Tone.Transport.bpm.value = 140;
-                const kick = new Tone.MembraneSynth().toDestination();
-                const delay = new Tone.FeedbackDelay("8n.", 0.5).toDestination();
-                // FIX: Changed 'supersaw' to 'sawtooth' as it's a valid basic oscillator type for Tone.Synth
-                const arpeggiator = new Tone.Synth({oscillator: {type: 'sawtooth'}}).connect(delay);
-                arpeggiator.volume.value = -18;
-                instruments.push(kick, delay, arpeggiator);
+            nobiyaka() {
+                Tone.Transport.bpm.value = 95;
+                const epiano = new Tone.PolySynth(Tone.FMSynth, {
+                    envelope: { attack: 0.02, decay: 0.8, sustain: 0.3, release: 1.5 },
+                    harmonicity: 3,
+                    modulationIndex: 5
+                }).toDestination();
+                epiano.volume.value = -10;
+                instruments.push(epiano);
 
-                const kickLoop = new Tone.Loop(time => kick.triggerAttackRelease('C1', '8n', time), '4n').start(0);
-                const notes = ['C4', 'E4', 'G4', 'B4'];
-                let noteIndex = 0;
-                const arpLoop = new Tone.Loop(time => {
-                    arpeggiator.triggerAttackRelease(notes[noteIndex % notes.length], '16n', time);
-                    noteIndex++;
-                }, '16n').start(0);
-                scheduledEvents.push(kickLoop, arpLoop);
-            }
+                const chords = [['C4', 'E4', 'G4', 'B4'], ['G4', 'B4', 'D5', 'F#5'], ['A4', 'C5', 'E5', 'G5'], ['F4', 'A4', 'C5', 'E5']];
+                const part = new Tone.Part((time, chord) => {
+                    epiano.triggerAttackRelease(chord, '1n', time);
+                }, [[0, chords[0]], ['0:2', chords[1]], ['1:0', chords[2]], ['1:2', chords[3]]]).start(0);
+                scheduledEvents.push(part);
+
+                const melody = new Tone.Synth({ oscillator: { type: 'triangle' } }).toDestination();
+                melody.volume.value = -6;
+                instruments.push(melody);
+                const melodyPattern = new Tone.Sequence((time, note) => {
+                    if (note) melody.triggerAttackRelease(note, '8n', time);
+                }, ['E5', 'G5', 'B5', 'A5', 'G5', 'E5', 'C5', null], '4n').start("0:1");
+                scheduledEvents.push(melodyPattern);
+            },
+            suzushige() {
+                Tone.Transport.bpm.value = 115;
+                const kalimba = new Tone.PluckSynth({
+                    attackNoise: 0.5,
+                    dampening: 6000,
+                    resonance: 0.9
+                }).toDestination();
+                kalimba.volume.value = -5;
+                instruments.push(kalimba);
+
+                const breeze = new Tone.Noise('white').start();
+                const filter = new Tone.AutoFilter({
+                    frequency: '4n',
+                    baseFrequency: 800,
+                    octaves: 4
+                }).toDestination().start();
+                breeze.connect(filter);
+                breeze.volume.value = -35;
+                instruments.push(breeze, filter);
+
+                const pattern = new Tone.Pattern((time, note) => {
+                    kalimba.triggerAttackRelease(note, '8n', time);
+                }, ['G5', 'A5', 'C6', 'D6', 'A5', 'G5', 'D6', 'C6'], '8n').start(0);
+                pattern.humanize = true;
+                scheduledEvents.push(pattern);
+
+                const pad = new Tone.PolySynth(Tone.AMSynth, {
+                    envelope: { attack: 1.5, decay: 0.5, sustain: 1, release: 3 },
+                }).toDestination();
+                pad.volume.value = -20;
+                instruments.push(pad);
+                const chordPart = new Tone.Part((time, chord) => {
+                    pad.triggerAttackRelease(chord, '2n', time);
+                }, [['0:0', ['C4', 'G4']], ['1:0', ['A3', 'E4']]]).start(0);
+                scheduledEvents.push(chordPart);
+            },
         };
 
         // --- UI Control Functions ---
@@ -356,10 +257,12 @@
             // Using setTimeout to allow UI to update before heavy processing
             setTimeout(() => {
                 try {
+                    // FIX: Cleanup is called once before generating new music
+                    bgmFactory.cleanup();
                     bgmFactory[style]();
                     
                     // Schedule transport to stop after the specified duration
-                    stopEventId = Tone.Transport.scheduleOnce(() => {
+                    Tone.Transport.scheduleOnce(() => {
                         Tone.Transport.stop();
                     }, BGM_DURATION_SECONDS);
 
@@ -389,6 +292,7 @@
             try {
                 // 1. Render audio offline
                 const buffer = await Tone.Offline(() => {
+                    // Call the style function directly. It no longer contains cleanup.
                     bgmFactory[currentStyle]();
                     Tone.Transport.start();
                 }, BGM_DURATION_SECONDS);
