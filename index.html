@@ -1,0 +1,500 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BGM Generator</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts for a nice font -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+    <!-- Tone.js for audio generation -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.7.77/Tone.js"></script>
+    <!-- lamejs for MP3 encoding -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.0/lame.min.js"></script>
+
+    <style>
+        /* Custom font classes */
+        body {
+            font-family: 'Noto Sans JP', sans-serif;
+        }
+        .font-display {
+            font-family: 'Mochiy Pop One', sans-serif;
+        }
+        /* Custom styles for smooth transitions and animations */
+        .btn-style {
+            transition: all 0.2s ease-in-out;
+        }
+        .btn-style:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .btn-style:active {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        /* Loading spinner animation */
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .spinner {
+            animation: spin 1s linear infinite;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-5xl">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-display text-gray-800">BGM Generator</h1>
+            <p class="mt-2 text-gray-500">イメージワードを選んで、あなただけのBGMを作ろう！</p>
+        </header>
+
+        <!-- Image Word Buttons -->
+        <div id="button-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 md:gap-6">
+            <!-- Buttons will be injected here by JavaScript -->
+        </div>
+
+        <!-- Loading/Status Indicator -->
+        <div id="status-indicator" class="text-center my-8 h-10 flex items-center justify-center hidden">
+            <div id="loading-spinner" class="spinner w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full mr-3"></div>
+            <span id="status-text" class="text-lg text-gray-600"></span>
+        </div>
+
+        <!-- Player Controls -->
+        <div id="player" class="mt-8 p-6 bg-white rounded-2xl shadow-lg hidden">
+            <div class="flex flex-col sm:flex-row items-center justify-between">
+                <div class="mb-4 sm:mb-0">
+                    <p class="text-sm text-gray-500">NOW PLAYING</p>
+                    <h2 id="current-bgm-title" class="text-2xl font-bold text-gray-800"></h2>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <button id="play-pause-btn" class="w-16 h-16 bg-blue-500 text-white rounded-full flex items-center justify-center shadow-md hover:bg-blue-600 transition">
+                        <!-- Play/Pause Icon -->
+                        <svg id="play-icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+                        <svg id="pause-icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" class="hidden"><path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z"/></svg>
+                    </button>
+                    <button id="download-btn" class="px-4 py-2 bg-green-500 text-white rounded-full flex items-center space-x-2 text-sm hover:bg-green-600 transition">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                        <span>MP3</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        const BGM_DURATION_SECONDS = 32; // 120BPMで16小節
+
+        // --- UI Elements ---
+        const buttonGrid = document.getElementById('button-grid');
+        const statusIndicator = document.getElementById('status-indicator');
+        const statusText = document.getElementById('status-text');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const player = document.getElementById('player');
+        const playPauseBtn = document.getElementById('play-pause-btn');
+        const playIcon = document.getElementById('play-icon');
+        const pauseIcon = document.getElementById('pause-icon');
+        const downloadBtn = document.getElementById('download-btn');
+        const currentBgmTitle = document.getElementById('current-bgm-title');
+
+        let isPlaying = false;
+        let currentStyle = null;
+        let instruments = []; // To keep track of created instruments for disposal
+        let scheduledEvents = []; // To keep track of scheduled events for disposal
+        let stopEventId = null; // To keep track of the scheduled stop event
+
+        // --- Image Word Definitions ---
+        const imageWords = {
+            yuttari: { name: 'ゆったり', emoji: '☁️', color: 'bg-sky-200', hover: 'hover:bg-sky-300' },
+            amenohi: { name: 'あめのひ', emoji: '☔️', color: 'bg-slate-300', hover: 'hover:bg-slate-400' },
+            seseragi: { name: 'せせらぎ', emoji: '🏞️', color: 'bg-teal-200', hover: 'hover:bg-teal-300' },
+            tabidachi: { name: 'たびだち', emoji: '✈️', color: 'bg-amber-200', hover: 'hover:bg-amber-300' },
+            bouken: { name: 'ぼうけん', emoji: '🧭', color: 'bg-orange-300', hover: 'hover:bg-orange-400' },
+            tatakai: { name: 'たたかい', emoji: '⚔️', color: 'bg-red-400', hover: 'hover:bg-red-500' },
+            bossa: { name: 'ボサノバ', emoji: '🎷', color: 'bg-purple-300', hover: 'hover:bg-purple-400' },
+            acid: { name: 'アシッド', emoji: '🧪', color: 'bg-lime-300', hover: 'hover:bg-lime-400' },
+            happycore: { name: 'ハピコア', emoji: '✨', color: 'bg-pink-300', hover: 'hover:bg-pink-400' },
+            metal: { name: 'ヘビメタ', emoji: '🤘', color: 'bg-gray-500', hover: 'hover:bg-gray-600' },
+            minimal: { name: 'ミニマル', emoji: '🔳', color: 'bg-gray-200', hover: 'hover:bg-gray-300' },
+            trance: { name: 'トランス', emoji: '💫', color: 'bg-cyan-300', hover: 'hover:bg-cyan-400' },
+        };
+        
+        // --- BGM Generation Logic ---
+        const bgmFactory = {
+            // Clean up previous instruments and transport events
+            cleanup() {
+                Tone.Transport.stop();
+                Tone.Transport.cancel();
+
+                // Explicitly dispose of all scheduled events
+                scheduledEvents.forEach(event => {
+                    if (event && typeof event.dispose === 'function') {
+                        event.dispose();
+                    }
+                });
+                scheduledEvents = [];
+
+                // Explicitly dispose of all instruments
+                instruments.forEach(inst => {
+                    if (inst && typeof inst.dispose === 'function') {
+                        inst.dispose();
+                    }
+                });
+                instruments = [];
+            },
+            
+            // --- Individual BGM Styles ---
+            // NOTE: The individual style functions are unchanged from the original code
+            // and are included here for completeness.
+            yuttari() {
+                this.cleanup();
+                Tone.Transport.bpm.value = 80;
+                const piano = new Tone.PolySynth(Tone.Synth, { oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.5, sustain: 0.2, release: 1 }, }).toDestination();
+                piano.volume.value = -8;
+                instruments.push(piano);
+                const chords = [['C4', 'E4', 'G4'], ['G4', 'B4', 'D5'], ['A4', 'C5', 'E5'], ['F4', 'A4', 'C5']];
+                const part = new Tone.Part((time, chord) => { piano.triggerAttackRelease(chord, '1n', time); }, [[0, chords[0]], ['0:2', chords[1]], ['1:0', chords[2]], ['1:2', chords[3]]]).start(0);
+                scheduledEvents.push(part);
+                const melody = new Tone.Synth().toDestination();
+                melody.volume.value = -4;
+                instruments.push(melody);
+                const melodyPattern = new Tone.Sequence((time, note) => { if (note) melody.triggerAttackRelease(note, '8n', time); }, ['G5', 'E5', null, 'C5', 'D5', null, 'E5', null], '4n').start(0);
+                scheduledEvents.push(melodyPattern);
+            },
+            amenohi() {
+                this.cleanup();
+                Tone.Transport.bpm.value = 65;
+                const rain = new Tone.Noise('pink').start();
+                const filter = new Tone.AutoFilter({ frequency: '8n', baseFrequency: 400, octaves: 3 }).toDestination().start();
+                rain.connect(filter);
+                rain.volume.value = -25;
+                instruments.push(rain, filter);
+                const pad = new Tone.PolySynth(Tone.AMSynth, { envelope: { attack: 2, decay: 1, sustain: 0.8, release: 4 }, }).toDestination();
+                pad.volume.value = -12;
+                instruments.push(pad);
+                const chords = [['D3', 'F3', 'A3', 'C4'], ['G3', 'B3', 'D4', 'F4']];
+                const part = new Tone.Part((time, chord) => { pad.triggerAttackRelease(chord, '2n', time); }, [[0, chords[0]], ['1:0', chords[1]]]).start(0);
+                scheduledEvents.push(part);
+            },
+            seseragi() {
+                this.cleanup();
+                Tone.Transport.bpm.value = 90;
+                const waterNoise = new Tone.Noise('white').start();
+                const waterFilter = new Tone.BandpassFilter(600, 5).toDestination();
+                waterNoise.connect(waterFilter);
+                waterNoise.volume.value = -30;
+                instruments.push(waterNoise, waterFilter);
+                const bird = new Tone.Synth({ oscillator: { type: 'sine' }, envelope: { attack: 0.01, decay: 0.2, sustain: 0.1, release: 0.5 }, }).toDestination();
+                bird.volume.value = -10;
+                instruments.push(bird);
+                const loop = new Tone.Loop(time => {
+                    bird.triggerAttackRelease('C6', '16n', time);
+                    bird.triggerAttackRelease('E6', '16n', time + 0.2);
+                    bird.triggerAttackRelease('G6', '16n', time + 0.5);
+                }, '2n').start('1n');
+                scheduledEvents.push(loop);
+            },
+            tabidachi() {
+                this.cleanup();
+                Tone.Transport.bpm.value = 110;
+                const piano = new Tone.PolySynth(Tone.FMSynth).toDestination();
+                piano.volume.value = -10;
+                const strings = new Tone.PolySynth(Tone.AMSynth).toDestination();
+                strings.volume.value = -15;
+                instruments.push(piano, strings);
+                const chords = [['C4', 'E4', 'G4'], ['G4', 'B4', 'D5'], ['F4', 'A4', 'C5'], ['C4', 'E4', 'G4']];
+                const part = new Tone.Part((time, chord) => {
+                    piano.triggerAttackRelease(chord, '2n', time);
+                    strings.triggerAttackRelease(chord, '1n', time);
+                }, [[0, chords[0]], ['0:2', chords[1]], ['1:0', chords[2]], ['1:2', chords[3]]]).start(0);
+                scheduledEvents.push(part);
+            },
+            bouken() {
+                this.cleanup();
+                Tone.Transport.bpm.value = 130;
+                const kick = new Tone.MembraneSynth().toDestination();
+                const snare = new Tone.NoiseSynth({noise: {type: 'white'}, envelope: {attack: 0.005, decay: 0.1, sustain: 0}}).toDestination();
+                snare.volume.value = -10;
+                const brass = new Tone.PolySynth(Tone.Synth, {oscillator: {type: 'sawtooth'}}).toDestination();
+                brass.volume.value = -12;
+                instruments.push(kick, snare, brass);
+                const kickLoop = new Tone.Loop(time => kick.triggerAttackRelease('C1', '8n', time), '4n').start(0);
+                const snareLoop = new Tone.Loop(time => snare.triggerAttackRelease('8n', time), '2n').start('4n');
+                const brassNotes = [['C4', 'G4'], ['D4', 'A4'], ['E4', 'B4']];
+                const sequence = new Tone.Sequence((time, note) => { brass.triggerAttackRelease(note, '8n', time); }, [brassNotes[0], brassNotes[1], brassNotes[2], null], '2n').start(0);
+                scheduledEvents.push(kickLoop, snareLoop, sequence);
+            },
+            tatakai() {
+                this.cleanup();
+                Tone.Transport.bpm.value = 150;
+                const dist = new Tone.Distortion(0.8).toDestination();
+                const guitar = new Tone.PolySynth(Tone.FMSynth, { harmonicity: 1.5, modulationIndex: 10, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.1 } }).connect(dist);
+                guitar.volume.value = -12;
+                const kick = new Tone.MembraneSynth({octaves: 10, pitchDecay: 0.01}).toDestination();
+                kick.volume.value = -5;
+                instruments.push(guitar, kick, dist);
+                const kickLoop = new Tone.Loop(time => kick.triggerAttackRelease('C1', '16n', time), '8n').start(0);
+                const sequence = new Tone.Sequence((time, note) => { guitar.triggerAttackRelease([note, Tone.Frequency(note).transpose(7).toNote()], '16n', time); }, ['E2', null, 'E2', 'F2', 'E2', null, 'D2', null], '8n').start(0);
+                scheduledEvents.push(kickLoop, sequence);
+            },
+            bossa() {
+                this.cleanup();
+                Tone.Transport.bpm.value = 140;
+                const ag = new Tone.PluckSynth({attackNoise: 1, dampening: 4000, resonance: 0.7}).toDestination();
+                ag.volume.value = -8;
+                const kick = new Tone.MembraneSynth().toDestination();
+                const hihat = new Tone.MetalSynth({frequency: 200, envelope: {attack: 0.001, decay: 0.1, release: 0.01}, harmonicity: 5.1, modulationIndex: 32, resonance: 4000, octaves: 1.5}).toDestination();
+                hihat.volume.value = -25;
+                instruments.push(ag, kick, hihat);
+                const part = new Tone.Part((time, note) => { ag.triggerAttackRelease(note, '8n', time); }, [['0:0', ['C4', 'E4', 'G4']], ['0:1.5', ['B3', 'D4', 'F4']], ['0:3', ['A3', 'C4', 'E4']]]).start(0);
+                const kickLoop1 = new Tone.Loop(time => kick.triggerAttackRelease('C1', '8n', time), '2n').start(0);
+                const kickLoop2 = new Tone.Loop(time => kick.triggerAttackRelease('C1', '8n', time), '2n').start('8n*1.5');
+                const hihatLoop = new Tone.Loop(time => hihat.triggerAttackRelease('C5', '16n', time), '8n').start(0);
+                scheduledEvents.push(part, kickLoop1, kickLoop2, hihatLoop);
+            },
+            acid() {
+                this.cleanup();
+                Tone.Transport.bpm.value = 128;
+                const kick = new Tone.MembraneSynth().toDestination();
+                const filter = new Tone.AutoFilter("16n").toDestination().start();
+                filter.wet.value = 0.8;
+                const acidBass = new Tone.MonoSynth({ oscillator: { type: 'sawtooth' }, filter: { Q: 6, type: 'lowpass', rolloff: -24 }, envelope: { attack: 0.01, decay: 0.2, sustain: 0, release: 0.1 }, filterEnvelope: { attack: 0.05, decay: 0.1, sustain: 0, release: 0.1, baseFrequency: 200, octaves: 4 } }).connect(filter);
+                acidBass.volume.value = -10;
+                instruments.push(kick, acidBass, filter);
+                const kickLoop = new Tone.Loop(time => kick.triggerAttackRelease('C1', '8n', time), '4n').start(0);
+                const sequence = new Tone.Sequence((time, note) => { acidBass.triggerAttackRelease(note, '16n', time); }, ['C2', 'C3', 'C2', 'G2', 'C2', 'C3', 'A#2', 'G2'], '16n').start(0);
+                scheduledEvents.push(kickLoop, sequence);
+            },
+            happycore() {
+                this.cleanup();
+                Tone.Transport.bpm.value = 175;
+                const kick = new Tone.MembraneSynth().toDestination();
+                const lead = new Tone.Synth({oscillator: {type: 'pulse', width: 0.6}, envelope: {attack: 0.01, decay: 0.1, sustain: 0.2, release: 0.2}}).toDestination();
+                lead.volume.value = -10;
+                instruments.push(kick, lead);
+                const kickLoop = new Tone.Loop(time => kick.triggerAttackRelease('C1', '8n', time), '4n').start(0);
+                const sequence = new Tone.Sequence((time, note) => { if(note) lead.triggerAttackRelease(note, '16n', time); }, ['C5', 'E5', 'G5', 'C6', 'G5', 'E5', 'C5', null], '8n').start(0);
+                scheduledEvents.push(kickLoop, sequence);
+            },
+            metal() {
+                this.cleanup();
+                Tone.Transport.bpm.value = 180;
+                const dist = new Tone.Distortion(0.9).toDestination();
+                const guitar = new Tone.FMSynth({harmonicity: 2, modulationIndex: 15}).connect(dist);
+                guitar.volume.value = -15;
+                const kick = new Tone.MembraneSynth({pitchDecay: 0.01}).toDestination();
+                kick.volume.value = -2;
+                const snare = new Tone.NoiseSynth({noise: {type: 'white'}, envelope: {decay: 0.05}}).toDestination();
+                snare.volume.value = -8;
+                instruments.push(dist, guitar, kick, snare);
+                const kickLoop = new Tone.Loop(time => kick.triggerAttackRelease('C1', '16n', time), '8n').start(0);
+                const snareLoop = new Tone.Loop(time => snare.triggerAttackRelease('8n', time), '2n').start('4n');
+                const sequence = new Tone.Sequence((time, note) => { guitar.triggerAttackRelease(note, '16n', time); }, ['E2', null, 'E2', null, 'F#2', 'E2', 'G2', 'F#2'], '16n').start(0);
+                scheduledEvents.push(kickLoop, snareLoop, sequence);
+            },
+            minimal() {
+                this.cleanup();
+                Tone.Transport.bpm.value = 125;
+                const kick = new Tone.MembraneSynth().toDestination();
+                const synth = new Tone.MonoSynth({oscillator: {type: 'sine'}, envelope: {attack: 0.01, decay: 0.3, sustain: 0.1, release: 0.8}}).toDestination();
+                synth.volume.value = -10;
+                instruments.push(kick, synth);
+                const kickLoop = new Tone.Loop(time => kick.triggerAttackRelease('C1', '8n', time), '4n').start(0);
+                const sequence = new Tone.Sequence((time, note) => { synth.triggerAttackRelease(note, '8n', time); }, ['C4', null, 'D4', 'C4', null, 'E4', 'C4', null], '4n').start(0);
+                scheduledEvents.push(kickLoop, sequence);
+            },
+            trance() {
+                this.cleanup();
+                Tone.Transport.bpm.value = 140;
+                const kick = new Tone.MembraneSynth().toDestination();
+                const delay = new Tone.FeedbackDelay("8n.", 0.5).toDestination();
+                // FIX: Changed 'supersaw' to 'sawtooth' as it's a valid basic oscillator type for Tone.Synth
+                const arpeggiator = new Tone.Synth({oscillator: {type: 'sawtooth'}}).connect(delay);
+                arpeggiator.volume.value = -18;
+                instruments.push(kick, delay, arpeggiator);
+
+                const kickLoop = new Tone.Loop(time => kick.triggerAttackRelease('C1', '8n', time), '4n').start(0);
+                const notes = ['C4', 'E4', 'G4', 'B4'];
+                let noteIndex = 0;
+                const arpLoop = new Tone.Loop(time => {
+                    arpeggiator.triggerAttackRelease(notes[noteIndex % notes.length], '16n', time);
+                    noteIndex++;
+                }, '16n').start(0);
+                scheduledEvents.push(kickLoop, arpLoop);
+            }
+        };
+
+        // --- UI Control Functions ---
+        function setStatus(text, isLoading) {
+            statusIndicator.classList.remove('hidden');
+            statusText.textContent = text;
+            loadingSpinner.style.display = isLoading ? 'block' : 'none';
+        }
+
+        function hideStatus() {
+            statusIndicator.classList.add('hidden');
+        }
+
+        function updatePlayButton() {
+            playIcon.classList.toggle('hidden', isPlaying);
+            pauseIcon.classList.toggle('hidden', !isPlaying);
+        }
+
+        // --- Main Logic ---
+        async function generateMusic(style) {
+            if (Tone.context.state !== 'running') {
+                await Tone.start();
+            }
+            
+            currentStyle = style;
+            setStatus('BGMを生成中...', true);
+            buttonGrid.querySelectorAll('button').forEach(b => b.disabled = true);
+
+            // Using setTimeout to allow UI to update before heavy processing
+            setTimeout(() => {
+                try {
+                    bgmFactory[style]();
+                    
+                    // Schedule transport to stop after the specified duration
+                    stopEventId = Tone.Transport.scheduleOnce(() => {
+                        Tone.Transport.stop();
+                    }, BGM_DURATION_SECONDS);
+
+                    Tone.Transport.start();
+                    isPlaying = true;
+
+                    player.classList.remove('hidden');
+                    currentBgmTitle.textContent = imageWords[style].name;
+                    updatePlayButton();
+                    hideStatus();
+                } catch (error) {
+                    console.error("Error generating music:", error);
+                    setStatus('エラーが発生しました。', false);
+                } finally {
+                    buttonGrid.querySelectorAll('button').forEach(b => b.disabled = false);
+                }
+            }, 100);
+        }
+
+        // --- MP3 Download Logic (Revised) ---
+        async function downloadMp3() {
+            if (!currentStyle) return;
+            
+            setStatus('MP3をエンコード中...', true);
+            downloadBtn.disabled = true;
+
+            try {
+                // 1. Render audio offline
+                const buffer = await Tone.Offline(() => {
+                    bgmFactory[currentStyle]();
+                    Tone.Transport.start();
+                }, BGM_DURATION_SECONDS);
+
+                // 2. Setup MP3 encoder
+                const mp3encoder = new lamejs.Mp3Encoder(buffer.numberOfChannels, buffer.sampleRate, 128);
+                const mp3Data = [];
+                const sampleBlockSize = 1152;
+
+                // 3. Get channel data and convert from Float32 to Int16
+                const left = buffer.getChannelData(0);
+                const right = buffer.numberOfChannels > 1 ? buffer.getChannelData(1) : null;
+                const leftInt16 = new Int16Array(left.length);
+                const rightInt16 = right ? new Int16Array(right.length) : null;
+
+                for (let i = 0; i < left.length; i++) {
+                    leftInt16[i] = Math.max(-1, Math.min(1, left[i])) * 32767;
+                    if (right) {
+                        rightInt16[i] = Math.max(-1, Math.min(1, right[i])) * 32767;
+                    }
+                }
+
+                // 4. Encode data in chunks
+                for (let i = 0; i < leftInt16.length; i += sampleBlockSize) {
+                    const leftChunk = leftInt16.subarray(i, i + sampleBlockSize);
+                    let mp3buf;
+                    if (rightInt16) {
+                        const rightChunk = rightInt16.subarray(i, i + sampleBlockSize);
+                        mp3buf = mp3encoder.encodeBuffer(leftChunk, rightChunk);
+                    } else {
+                        mp3buf = mp3encoder.encodeBuffer(leftChunk);
+                    }
+                    if (mp3buf.length > 0) {
+                        mp3Data.push(new Uint8Array(mp3buf));
+                    }
+                }
+
+                // 5. Finalize the MP3
+                const mp3buf = mp3encoder.flush();
+                if (mp3buf.length > 0) {
+                    mp3Data.push(new Uint8Array(mp3buf));
+                }
+
+                // 6. Create Blob and trigger download
+                const blob = new Blob(mp3Data, { type: 'audio/mp3' });
+                const url = URL.createObjectURL(blob);
+
+                const a = document.createElement('a');
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/[-:T]/g, '');
+                a.href = url;
+                a.download = `${currentStyle}_${timestamp}.mp3`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                hideStatus();
+
+            } catch (error) {
+                console.error("MP3 encoding failed:", error);
+                setStatus('MP3の作成に失敗しました。', false);
+            } finally {
+                downloadBtn.disabled = false;
+            }
+        }
+
+        // --- Initial Setup ---
+        function init() {
+            // Create image word buttons
+            for (const key in imageWords) {
+                const word = imageWords[key];
+                const button = document.createElement('button');
+                button.className = `btn-style w-full h-28 md:h-32 rounded-2xl text-gray-800 font-bold text-lg flex flex-col items-center justify-center shadow-md ${word.color} ${word.hover}`;
+                button.innerHTML = `<span class="text-4xl mb-1">${word.emoji}</span><span>${word.name}</span>`;
+                button.onclick = () => generateMusic(key);
+                buttonGrid.appendChild(button);
+            }
+
+            // Player event listeners
+            playPauseBtn.addEventListener('click', () => {
+                if (Tone.context.state !== 'running') {
+                    // If context is not running, do nothing until music is generated
+                    return;
+                }
+                if (Tone.Transport.state === 'started') {
+                    Tone.Transport.pause();
+                    isPlaying = false;
+                } else {
+                    Tone.Transport.start();
+                    isPlaying = true;
+                }
+                updatePlayButton();
+            });
+
+            downloadBtn.addEventListener('click', downloadMp3);
+            
+            // Stop audio when transport stops (e.g. at the end of playback)
+            Tone.Transport.on('stop', () => {
+                isPlaying = false;
+                updatePlayButton();
+                // Reset transport position for next play
+                Tone.Transport.position = 0;
+            });
+        }
+
+        init();
+    </script>
+</body>
+</html>
